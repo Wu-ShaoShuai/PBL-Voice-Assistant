@@ -1,0 +1,22 @@
+# 模块选择
+asr_provider: "fun_local"
+llm_provider: "openai"
+tts_provider: "edge"
+
+# ASR 配置
+ASR:
+  fun_local:
+    model_dir: models/SenseVoiceSmall   # 或者保持原来的路径
+
+# LLM 配置（保持不变）
+LLM:
+  openai:
+    api_key: "7a449bbf98b740ba97403c07582f7dab.nRyZ2LArRdjOKPnd"
+    model_name: "glm-4-flash"
+    url: "https://open.bigmodel.cn/api/paas/v4/"
+
+# TTS 配置
+TTS:
+  edge:
+    voice: "zh-CN-XiaoxiaoNeural"
+    format: "mp3"
