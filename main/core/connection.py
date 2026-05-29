@@ -199,6 +199,14 @@ class Asker:
         else:
             raise NotImplementedError("TTS 接口不支持 synthesize")
 
+    async def transcribe_audio(self, pcm_bytes: bytes, sample_rate: int = 16000) -> str:
+        """仅做 ASR，返回识别文本"""
+        return await self._asr_audio(pcm_bytes, sample_rate)
+
+    async def synthesize_text(self, text: str) -> bytes:
+        """仅做 TTS，返回音频字节"""
+        return await self._tts_text(text)
+
     async def close(self):
         """释放资源"""
         if self.asr:

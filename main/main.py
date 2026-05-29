@@ -6,13 +6,16 @@ FastAPI 入口 - 独立语音问答服务
 import os
 import uuid
 import tempfile
+import base64
+from io import BytesIO
 from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from pydub import AudioSegment
 
 from config.config_loader import load_config
 from config.logger import setup_logging
@@ -25,7 +28,7 @@ logger = setup_logging()
 # 加载配置
 config = load_config()
 
-# 初始化 Asker（全局单例，避免重复加载模型）
+# 初始化 Asker
 asker: Optional[Asker] = None
 
 # FastAPI 应用
@@ -148,9 +151,8 @@ async def ask_audio(
             output_bytes = seg.export(format="mp3").read()
             media_type = "audio/mpeg"
         elif response_format == "opus":
-            # 简单返回 PCM（Opus 编码需要额外实现）
             media_type = "audio/ogg"
-        else:  # wav
+        else:
             import io
             import wave
             wav_io = io.BytesIO()
@@ -174,6 +176,54 @@ async def ask_audio(
             pass
 
 
+@app.post("/ask/audio_with_text")
+async def ask_audio_with_text(audio: UploadFile = File(...)):
+    """
+    语音问答，返回 JSON：
+    {
+        "user_text": "识别的用户文本",
+        "assistant_text": "助手回复文本",
+        "audio_base64": "base64编码的音频数据"
+    }
+    """
+    if not asker:
+        raise HTTPException(status_code=503, detail="服务未就绪")
+
+    MAX_SIZE = 10 * 1024 * 1024
+    contents = await audio.read()
+    if len(contents) > MAX_SIZE:
+        raise HTTPException(status_code=413, detail="文件过大")
+
+    # 转换音频为 16kHz 单声道 PCM
+    try:
+        audio_seg = AudioSegment.from_file(BytesIO(contents))
+        audio_seg = audio_seg.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+        pcm_bytes = audio_seg.raw_data
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"音频转换失败: {e}")
+
+    # 1. ASR 识别用户文本
+    user_text = await asker.transcribe_audio(pcm_bytes, 16000)
+    if not user_text:
+        user_text = "（未识别到语音）"
+
+    # 2. LLM 生成回复文本（会自动添加用户消息到对话历史）
+    assistant_text = await asker.ask_text(user_text)
+    if not assistant_text:
+        assistant_text = "抱歉，我暂时无法回答。"
+
+    # 3. TTS 合成音频
+    audio_bytes = await asker.synthesize_text(assistant_text)
+
+    # 4. 返回 JSON
+    audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+    return JSONResponse(content={
+        "user_text": user_text,
+        "assistant_text": assistant_text,
+        "audio_base64": audio_base64
+    })
+
+
 @app.post("/ask/audio_raw")
 async def ask_audio_raw(request: Request):
     """
@@ -190,7 +240,6 @@ async def ask_audio_raw(request: Request):
 
         audio_bytes = await asker.ask_audio(pcm_bytes, sample_rate=16000)
 
-        # 转换为 WAV 返回
         import io
         import wave
         wav_io = io.BytesIO()

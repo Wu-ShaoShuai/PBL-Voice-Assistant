@@ -21,3 +21,7 @@ class TTSProvider(TTSProviderBase):
             if chunk["type"] == "audio":
                 audio_bytes += chunk["data"]
         return audio_bytes
+    
+    async def close(self):
+        """释放资源"""
+    pass
