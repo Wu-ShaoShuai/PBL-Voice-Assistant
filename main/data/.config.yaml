@@ -11,7 +11,7 @@ ASR:
 # LLM 配置（保持不变）
 LLM:
   openai:
-    api_key: "7a449bbf98b740ba97403c07582f7dab.nRyZ2LArRdjOKPnd"
+    api_key: your-key
     model_name: "glm-4-flash"
     url: "https://open.bigmodel.cn/api/paas/v4/"
 
